@@ -43,19 +43,7 @@ body {
   padding: max(0.5rem, env(safe-area-inset-top)) 0.65rem max(1rem, env(safe-area-inset-bottom));
 }
 
-.app-header {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.65rem;
-  margin-bottom: 0.65rem;
-}
-
-.app-header .direction-toggle {
-  align-self: center;
-}
-
-.app-header h1 {
+header h1 {
   margin: 0;
   font-size: 1.45rem;
   font-weight: 800;
@@ -69,6 +57,15 @@ body {
 .subtitle {
   margin: 0.25rem 0 1.5rem;
   color: var(--muted);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.65rem;
 }
 
 .direction-toggle {
@@ -667,77 +664,14 @@ body {
   font-size: 0.9rem;
 }
 
-@media (min-width: 641px) {
-  .app {
-    max-width: 720px;
-    margin-top: 1.25rem;
-    padding: 1.25rem 1.35rem 1.5rem;
-    background: rgba(21, 29, 43, 0.72);
-    border: 1px solid var(--border-soft);
-    border-radius: calc(var(--radius-lg) + 4px);
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
-  }
-
-  .app-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.85rem;
-  }
-
-  .app-header .direction-toggle {
-    align-self: auto;
-    flex-shrink: 0;
-  }
-
-  .app-header h1 {
-    font-size: 1.55rem;
-  }
-
-  .card {
-    padding: 1.25rem 1.1rem;
-    min-height: 180px;
-  }
-
-  .card-front {
-    font-size: 1.12rem;
-    line-height: 1.6;
-  }
-
-  .footer-actions {
-    width: auto;
-    max-width: 100%;
-  }
-
-  .footer-actions .sync-btn {
-    flex: 0 1 auto;
-    white-space: nowrap;
-  }
-
-  .footer-actions-secondary .sync-btn {
-    flex: 0 1 auto;
-    max-width: none;
-    background: transparent;
-    color: var(--muted);
-    box-shadow: none;
-  }
-
-  .footer-actions-secondary .sync-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--text);
-    box-shadow: none;
-  }
-}
-
 @media (max-width: 480px) {
   .app {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
   }
 
-  .app-header h1 { font-size: 1.25rem; }
-  .app-header { margin-bottom: 0.5rem; gap: 0.5rem; }
+  header h1 { font-size: 1.25rem; }
+  .toolbar { justify-content: center; margin-bottom: 0.5rem; }
   .direction-toggle { width: 100%; }
   .dir-btn { flex: 1; padding: 0.4rem 0.5rem; font-size: 0.78rem; }
   .footer-actions .sync-btn { font-size: 0.78rem; min-width: 0; }

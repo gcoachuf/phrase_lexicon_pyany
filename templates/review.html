@@ -14,13 +14,16 @@
 </head>
 <body>
   <div class="app">
-    <header class="app-header">
+    <header>
       <h1>Nik's Deutsch Trainer</h1>
+    </header>
+
+    <div class="toolbar">
       <div class="direction-toggle" role="group" aria-label="Card direction">
         <button id="btn-de-en" class="dir-btn{% if direction == 'de_en' %} active{% endif %}" data-direction="de_en">DE → EN</button>
         <button id="btn-en-de" class="dir-btn{% if direction == 'en_de' %} active{% endif %}" data-direction="en_de">EN → DE</button>
       </div>
-    </header>
+    </div>
 
     <div id="stats" class="stats">
       <label class="stat-learn" for="session-goal">
