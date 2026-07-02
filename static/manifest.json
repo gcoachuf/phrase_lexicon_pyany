@@ -1,6 +1,6 @@
 {
-  "name": "Deutsch Phrase Trainer",
-  "short_name": "Deutsch",
+  "name": "Nik's Deutsch Trainer",
+  "short_name": "Nik's Deutsch",
   "description": "Phrase lexicon trainer synced from Google Doc",
   "start_url": "/",
   "display": "standalone",

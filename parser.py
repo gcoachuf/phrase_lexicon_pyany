@@ -68,14 +68,23 @@ def parse_cloze_block(block: str) -> list[dict]:
     return cards
 
 
-def parse_cloze_cards(text: str) -> list[dict]:
-    section = text
+def _card_section(text: str) -> str:
+    if "Phrase Trainer" in text:
+        return text.split("Phrase Trainer", 1)[1]
     if "Phrase Lexicon" in text:
-        section = text.split("Phrase Lexicon", 1)[1]
+        return text.split("Phrase Lexicon", 1)[1]
+    return text
+
+
+def parse_cloze_cards(text: str) -> list[dict]:
+    section = _card_section(text)
+    deck = "phrase_trainer" if "Phrase Trainer" in text else "phrase_lexicon"
 
     cards: list[dict] = []
     for block in re.split(r"^---\s*$", section, flags=re.MULTILINE):
-        cards.extend(parse_cloze_block(block))
+        for card in parse_cloze_block(block):
+            card["deck"] = deck
+            cards.append(card)
     return cards
 
 
