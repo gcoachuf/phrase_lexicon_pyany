@@ -13,6 +13,8 @@ DOC_ID = os.environ.get(
     "GOOGLE_DOC_ID", "1TX2Qd17AJ9nQ_A3QUtNSNbQ5WEqt4hfFVoaAUD_ifCw"
 ).strip()
 DEFAULT_DOC_TAB = "t.x0jh4b5vn4op"
+TRAINER_START_MARKER = "*****START***TRAINER*****"
+TRAINER_END_MARKER = "*****END***TRAINER*****"
 
 _data_dir = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
 HINTS_DIR = _data_dir / "hints"
@@ -119,6 +121,19 @@ def _trim_html_fragment_at_markers(fragment: str) -> str:
     if match:
         fragment = fragment[: match.start()]
     return fragment
+
+
+def _extract_trainer_region(text: str) -> tuple[str, bool]:
+    """Return trainer content between START/END markers, if present."""
+    cleaned = text.lstrip("\ufeff")
+    start = cleaned.find(TRAINER_START_MARKER)
+    if start == -1:
+        return cleaned, False
+
+    start += len(TRAINER_START_MARKER)
+    end = cleaned.find(TRAINER_END_MARKER, start)
+    region = cleaned[start:end].strip() if end != -1 else cleaned[start:].strip()
+    return region, True
 
 
 def normalize_card(card: dict) -> dict:
@@ -567,12 +582,17 @@ def parse_all(text: str | None = None) -> list[dict]:
         except Exception:
             html = None
 
+    text, trainer_marked = _extract_trainer_region(text)
+    if html:
+        html, _ = _extract_trainer_region(html)
+
     cloze = parse_cloze_cards(text)
     if html and cloze:
         merge_html_image_hints(cloze, html)
         merge_html_back_formatting(cloze, html)
-    legacy = parse_phrase_lexicon_legacy(text) if not cloze else []
-    cards = cloze + legacy + parse_gwod_cards(text)
+    legacy = parse_phrase_lexicon_legacy(text) if not cloze and not trainer_marked else []
+    gwod = parse_gwod_cards(text) if not trainer_marked else []
+    cards = cloze + legacy + gwod
 
     seen: set[tuple[str, str, str]] = set()
     unique: list[dict] = []

@@ -1,6 +1,14 @@
 """Quick parser checks for the cloze card format."""
 
-from parser import merge_html_back_formatting, parse_all, parse_cloze_block, parse_cloze_cards
+from parser import (
+    TRAINER_END_MARKER,
+    TRAINER_START_MARKER,
+    _extract_trainer_region,
+    merge_html_back_formatting,
+    parse_all,
+    parse_cloze_block,
+    parse_cloze_cards,
+)
 
 EXAMPLE = """---
 EN_DE
@@ -73,9 +81,34 @@ Note: this is a note only
     assert "note only" not in cards[0]["back"]
 
 
+def test_trainer_region_markers():
+    doc = f"""Noise before
+{TRAINER_START_MARKER}
+---
+EN_DE
+Front: only _____
+Back: inside
+---
+{TRAINER_END_MARKER}
+Phrase Lexicon
+outside front
+outside back
+"""
+    region, marked = _extract_trainer_region(doc)
+    assert marked is True
+    cards = parse_cloze_cards(region)
+    assert len(cards) == 1
+    assert cards[0]["back"] == "inside"
+
+    all_cards = parse_all(doc)
+    assert len(all_cards) == 1
+    assert all_cards[0]["back"] == "inside"
+
+
 if __name__ == "__main__":
     test_cloze_parse()
     test_back_underline_from_html()
     test_note_not_in_back()
     test_note_on_own_line_not_in_back()
+    test_trainer_region_markers()
     print("ok")

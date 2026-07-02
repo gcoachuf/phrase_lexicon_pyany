@@ -1,10 +1,12 @@
 """SQLite storage for flashcards and review state."""
 
+import base64
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
-from parser import card_identity, classify_hint, normalize_card
+from parser import HINTS_DIR, card_identity, classify_hint, normalize_card
 from scheduler import initial_card_state, today
 
 _data_dir = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
@@ -120,6 +122,8 @@ SYNC_META_KEYS = (
     "last_sync_skipped",
     "last_sync_parsed",
 )
+
+EXPORT_VERSION = 1
 
 
 def clear_sync_meta() -> None:
@@ -358,6 +362,118 @@ def clear_all_cards() -> int:
         conn.execute("DELETE FROM cards")
     clear_sync_meta()
     return count
+
+
+def _card_row_to_export(row: sqlite3.Row) -> dict:
+    return {
+        "direction": row["direction"],
+        "front": row["front"],
+        "back": row["back"],
+        "group_key": row["group_key"],
+        "deck": row["deck"],
+        "source": row["source"],
+        "visual_hint": row["visual_hint"] if "visual_hint" in row.keys() else "",
+        "back_html": row["back_html"] if "back_html" in row.keys() else "",
+        "card_note": row["card_note"] if "card_note" in row.keys() else "",
+        "interval": row["interval"],
+        "ease": row["ease"],
+        "due": row["due"],
+        "reps": row["reps"],
+        "lapses": row["lapses"],
+    }
+
+
+def _collect_hint_files(cards: list[dict]) -> dict[str, str]:
+    hints: dict[str, str] = {}
+    for card in cards:
+        hint = card.get("visual_hint", "")
+        if not hint.startswith("/api/hints/"):
+            continue
+        filename = hint.rsplit("/", 1)[-1]
+        if ".." in filename or "/" in filename or "\\" in filename:
+            continue
+        path = HINTS_DIR / filename
+        if path.exists() and filename not in hints:
+            hints[filename] = base64.b64encode(path.read_bytes()).decode("ascii")
+    return hints
+
+
+def export_snapshot() -> dict:
+    """Export cards, sync meta, and local hint images for backup."""
+    init_db()
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM cards ORDER BY id").fetchall()
+        cards = [_card_row_to_export(row) for row in rows]
+        meta = {
+            row["key"]: row["value"]
+            for row in conn.execute("SELECT key, value FROM meta").fetchall()
+        }
+    return {
+        "version": EXPORT_VERSION,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "cards": cards,
+        "meta": meta,
+        "hints": _collect_hint_files(cards),
+    }
+
+
+def import_snapshot(data: dict) -> dict:
+    """Replace all cards and meta from an export file."""
+    if data.get("version") != EXPORT_VERSION:
+        raise ValueError("Unsupported backup version.")
+
+    cards = data.get("cards")
+    if not isinstance(cards, list):
+        raise ValueError("Backup file is missing card data.")
+
+    init_db()
+    with connect() as conn:
+        conn.execute("DELETE FROM cards")
+        conn.execute("DELETE FROM meta")
+        for card in cards:
+            conn.execute(
+                """
+                INSERT INTO cards
+                    (direction, front, back, group_key, deck, source, visual_hint, back_html, card_note,
+                     interval, ease, due, reps, lapses)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    card["direction"],
+                    card["front"],
+                    card["back"],
+                    card.get("group_key", ""),
+                    card.get("deck", "phrase_lexicon"),
+                    card.get("source", "cloze"),
+                    card.get("visual_hint", ""),
+                    card.get("back_html", ""),
+                    card.get("card_note", ""),
+                    card.get("interval", 0),
+                    card.get("ease", 2.5),
+                    card.get("due", today().isoformat()),
+                    card.get("reps", 0),
+                    card.get("lapses", 0),
+                ),
+            )
+        for key, value in (data.get("meta") or {}).items():
+            conn.execute(
+                "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, str(value)),
+            )
+
+    HINTS_DIR.mkdir(parents=True, exist_ok=True)
+    restored_hints = 0
+    for filename, payload in (data.get("hints") or {}).items():
+        if ".." in filename or "/" in filename or "\\" in filename:
+            continue
+        (HINTS_DIR / filename).write_bytes(base64.b64decode(payload))
+        restored_hints += 1
+
+    return {
+        "cards": len(cards),
+        "meta": len(data.get("meta") or {}),
+        "hints": restored_hints,
+    }
 
 
 def update_card(card_id: int, fields: dict) -> None:

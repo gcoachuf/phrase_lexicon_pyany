@@ -1,8 +1,10 @@
 """Phrase lexicon trainer — Anki-style review from Google Doc."""
 
+import json
 import os
+from datetime import datetime, timezone
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, jsonify, render_template, request, send_from_directory
 
 import db
 from scheduler import review_card
@@ -10,7 +12,7 @@ from sync_service import run_sync
 from parser import HINTS_DIR, doc_source
 
 app = Flask(__name__)
-BUILD_ID = os.environ.get("BUILD_ID", "1e54c96-1")
+BUILD_ID = os.environ.get("BUILD_ID", "47aa9a3-2")
 
 
 @app.after_request
@@ -177,6 +179,52 @@ def reset_dict():
             "deleted": count,
             "stats": db.get_stats(),
             "direction_counts": db.get_direction_counts(),
+        }
+    )
+
+
+@app.route("/api/export")
+def export_backup():
+    payload = db.export_snapshot()
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    body = json.dumps(payload, ensure_ascii=False, indent=2)
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="phrase-lexicon-backup-{stamp}.json"'
+        },
+    )
+
+
+@app.route("/api/import", methods=["POST"])
+def import_backup():
+    upload = request.files.get("file")
+    if upload:
+        try:
+            data = json.loads(upload.read().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return jsonify({"ok": False, "error": "Invalid JSON file."}), 400
+    else:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"ok": False, "error": "No backup file provided."}), 400
+
+    try:
+        result = db.import_snapshot(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    direction = request.args.get("direction", "de_en")
+    if direction not in ("en_de", "de_en"):
+        direction = "de_en"
+    return jsonify(
+        {
+            "ok": True,
+            **result,
+            "stats": db.get_stats(direction),
+            "direction_counts": db.get_direction_counts(),
+            "last_sync_at": db.get_meta("last_sync_at"),
         }
     )
 

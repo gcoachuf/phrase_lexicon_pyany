@@ -75,6 +75,12 @@
       </div>
       <p class="build-id">Build {{ build_id }}</p>
       <p id="sync-status" class="sync-status">Sync adds new phrases only — your progress is kept.</p>
+      <div class="footer-backup">
+        <button id="btn-export" class="backup-link" type="button">Export</button>
+        <span class="backup-sep" aria-hidden="true">·</span>
+        <button id="btn-import" class="backup-link" type="button">Import</button>
+        <input id="import-file" type="file" accept="application/json,.json" class="hidden">
+      </div>
     </footer>
   </div>
 
@@ -159,6 +165,7 @@
       resetStepText: document.getElementById("reset-step-text"),
       resetStep3: document.getElementById("reset-step-3"),
       resetInput: document.getElementById("reset-input"),
+      importFile: document.getElementById("import-file"),
       resetStepIndicator: document.getElementById("reset-step-indicator"),
       btnResetNext: document.getElementById("btn-reset-next"),
       resetTitle: document.getElementById("reset-title"),
@@ -626,11 +633,73 @@
       }
     }
 
+    async function exportBackup() {
+      try {
+        const res = await fetch("/api/export");
+        if (!res.ok) throw new Error("Export failed");
+        const blob = await res.blob();
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `phrase-lexicon-backup-${stamp}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage("Backup downloaded.", "success");
+      } catch (err) {
+        showMessage(err.message, "error");
+      }
+    }
+
+    async function importBackup(file) {
+      if (!file) return;
+      if (!window.confirm("Import replaces all cards and progress on this server. Continue?")) {
+        els.importFile.value = "";
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const res = await fetch(`/api/import?direction=${direction}`, {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Import failed");
+        sessionDone = 0;
+        updateStats(data.stats);
+        if (data.direction_counts) {
+          directionCounts = data.direction_counts;
+        }
+        if (data.last_sync_at) {
+          setSyncStatus(`Restored backup · Last sync: ${formatSyncTime(data.last_sync_at)}`);
+        } else {
+          setSyncStatus("Backup imported.");
+        }
+        showMessage(
+          `Imported ${data.cards} card${data.cards === 1 ? "" : "s"} and ${data.meta} sync record${data.meta === 1 ? "" : "s"}.`,
+          "success"
+        );
+        await loadNextCard();
+      } catch (err) {
+        showMessage(err.message, "error");
+      } finally {
+        els.importFile.value = "";
+      }
+    }
+
     document.getElementById("btn-de-en").addEventListener("click", () => setDirection("de_en"));
     document.getElementById("btn-en-de").addEventListener("click", () => setDirection("en_de"));
     document.getElementById("btn-sync").addEventListener("click", syncDoc);
     document.getElementById("btn-reset-progress").addEventListener("click", () => openResetModal("progress"));
     document.getElementById("btn-reset-dict").addEventListener("click", () => openResetModal("dict"));
+    document.getElementById("btn-export").addEventListener("click", exportBackup);
+    document.getElementById("btn-import").addEventListener("click", () => els.importFile.click());
+    els.importFile.addEventListener("change", () => {
+      const file = els.importFile.files[0];
+      if (file) importBackup(file);
+    });
     els.sessionGoal.addEventListener("change", onSessionGoalChanged);
     els.sessionGoal.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
