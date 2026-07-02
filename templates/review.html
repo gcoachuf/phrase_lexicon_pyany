@@ -46,7 +46,10 @@
       <div class="deck-label" id="deck-label"></div>
       <div class="card" id="card">
         <div class="card-front" id="card-front"></div>
-        <div id="visual-hint" class="visual-hint hidden" aria-label="Visual hint"></div>
+        <div id="hint-area" class="hint-area hidden">
+          <button type="button" id="btn-hint" class="hint-btn" aria-expanded="false" aria-controls="hint-content">Hint</button>
+          <div id="hint-content" class="hint-content hidden"></div>
+        </div>
         <div class="card-back hidden" id="card-back"></div>
         <button id="btn-reveal" class="reveal-btn">Check answer</button>
       </div>
@@ -137,7 +140,9 @@
       loadingState: document.getElementById("loading-state"),
       cardFront: document.getElementById("card-front"),
       cardBack: document.getElementById("card-back"),
-      visualHint: document.getElementById("visual-hint"),
+      hintArea: document.getElementById("hint-area"),
+      btnHint: document.getElementById("btn-hint"),
+      hintContent: document.getElementById("hint-content"),
       deckLabel: document.getElementById("deck-label"),
       btnReveal: document.getElementById("btn-reveal"),
       ratingArea: document.getElementById("rating-area"),
@@ -261,8 +266,10 @@
       els.cardBack.classList.remove("correct", "incorrect");
       els.btnReveal.classList.remove("hidden");
       els.ratingArea.classList.add("hidden");
-      els.visualHint.classList.add("hidden");
-      els.visualHint.innerHTML = "";
+      els.hintArea.classList.add("hidden");
+      els.btnHint.setAttribute("aria-expanded", "false");
+      els.hintContent.classList.add("hidden");
+      els.hintContent.innerHTML = "";
     }
 
     function normalizeAnswer(value) {
@@ -337,18 +344,28 @@
         .replace(/"/g, "&quot;");
     }
 
-    function renderVisualHint(card) {
-      if (!card.visual_hint || card.visual_hint_type === "none") {
-        els.visualHint.classList.add("hidden");
-        els.visualHint.innerHTML = "";
+    function toggleHint() {
+      const isOpen = els.btnHint.getAttribute("aria-expanded") === "true";
+      els.btnHint.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      els.hintContent.classList.toggle("hidden", isOpen);
+    }
+
+    function renderHint(card) {
+      if (!card.hint || card.hint_type === "none") {
+        els.hintArea.classList.add("hidden");
+        els.btnHint.setAttribute("aria-expanded", "false");
+        els.hintContent.classList.add("hidden");
+        els.hintContent.innerHTML = "";
         return;
       }
 
-      els.visualHint.classList.remove("hidden");
-      if (card.visual_hint_type === "image") {
-        els.visualHint.innerHTML = `<img src="${escapeHtml(card.visual_hint)}" alt="Visual hint">`;
+      els.hintArea.classList.remove("hidden");
+      els.btnHint.setAttribute("aria-expanded", "false");
+      els.hintContent.classList.add("hidden");
+      if (card.hint_type === "image") {
+        els.hintContent.innerHTML = `<img src="${escapeHtml(card.hint)}" alt="Hint">`;
       } else {
-        els.visualHint.innerHTML = `<p class="visual-hint-text">${escapeHtml(card.visual_hint)}</p>`;
+        els.hintContent.innerHTML = `<p class="hint-text">${escapeHtml(card.hint)}</p>`;
       }
     }
 
@@ -358,7 +375,7 @@
       const dirLabel = card.direction === "de_en" ? "DE → EN" : "EN → DE";
       els.deckLabel.textContent = `${card.deck.replace("_", " ")} · ${dirLabel}`;
       renderCardFront(card.front);
-      renderVisualHint(card);
+      renderHint(card);
       els.cardBack.textContent = card.back;
       els.btnReveal.textContent = card.front.includes("_____") ? "Check answer" : "Show answer";
       updateDirectionButtons(card);
@@ -558,6 +575,7 @@
     });
 
     els.btnReveal.addEventListener("click", () => revealAnswer());
+    els.btnHint.addEventListener("click", toggleHint);
     document.querySelectorAll(".rate-btn").forEach((btn) => {
       btn.addEventListener("click", () => submitReview(Number(btn.dataset.rating)));
     });

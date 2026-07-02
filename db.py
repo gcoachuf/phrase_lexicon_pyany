@@ -4,7 +4,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from parser import card_identity, classify_visual_hint, normalize_card
+from parser import card_identity, classify_hint, normalize_card
 from scheduler import initial_card_state, today
 
 _data_dir = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
@@ -156,7 +156,7 @@ def import_cards(cards: list[dict]) -> tuple[int, int, int]:
                     normalized.get("group_key", ""),
                     normalized["deck"],
                     normalized["source"],
-                    normalized.get("visual_hint", ""),
+                    normalized.get("hint", normalized.get("visual_hint", "")),
                     state["interval"],
                     state["ease"],
                     state["due"],
@@ -318,7 +318,7 @@ def _group_directions(conn: sqlite3.Connection, group_key: str, direction: str) 
 
 def _row_to_card(row: sqlite3.Row, conn: sqlite3.Connection) -> dict:
     raw_hint = row["visual_hint"] if "visual_hint" in row.keys() else ""
-    hint_value, hint_type = classify_visual_hint(raw_hint)
+    hint_value, hint_type = classify_hint(raw_hint)
     paired_directions = _group_directions(conn, row["group_key"], row["direction"])
     return {
         "id": row["id"],
@@ -327,8 +327,8 @@ def _row_to_card(row: sqlite3.Row, conn: sqlite3.Connection) -> dict:
         "deck": row["deck"],
         "direction": row["direction"],
         "group_key": row["group_key"],
-        "visual_hint": hint_value,
-        "visual_hint_type": hint_type,
+        "hint": hint_value,
+        "hint_type": hint_type,
         "paired_directions": paired_directions,
         "can_switch_direction": len(paired_directions) > 1,
         "interval": row["interval"],

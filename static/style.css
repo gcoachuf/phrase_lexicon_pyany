@@ -214,13 +214,39 @@ header h1 {
   white-space: pre-wrap;
 }
 
-.visual-hint {
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
+.hint-area {
+  margin-top: 1rem;
+  width: 100%;
 }
 
-.visual-hint img {
+.hint-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0.5rem 1rem;
+  min-height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.hint-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.hint-btn[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.hint-content {
+  margin-top: 0.75rem;
+}
+
+.hint-content img {
   display: block;
   max-width: 100%;
   max-height: 240px;
@@ -229,7 +255,7 @@ header h1 {
   object-fit: contain;
 }
 
-.visual-hint-text {
+.hint-text {
   margin: 0;
   color: var(--muted);
   font-size: 0.95rem;

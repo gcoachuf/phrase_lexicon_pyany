@@ -36,19 +36,19 @@ def normalize_card(card: dict) -> dict:
     direction = card["direction"].strip().lower()
     if direction not in ("en_de", "de_en"):
         direction = "en_de"
-    visual_hint = normalize_text(card.get("visual_hint", ""))
-    hint_value, hint_type = classify_visual_hint(visual_hint)
+    hint = normalize_text(card.get("hint", card.get("visual_hint", "")))
+    hint_value, hint_type = classify_hint(hint)
     return {
         **card,
         "direction": direction,
         "front": normalize_text(card["front"]),
         "back": normalize_text(card["back"]),
-        "visual_hint": hint_value,
-        "visual_hint_type": hint_type,
+        "hint": hint_value,
+        "hint_type": hint_type,
     }
 
 
-def classify_visual_hint(text: str) -> tuple[str, str]:
+def classify_hint(text: str) -> tuple[str, str]:
     text = normalize_text(text) if text else ""
     if not text:
         return "", "none"
@@ -79,39 +79,54 @@ def _group_key(en_de_front: str, de_en_front: str) -> str:
 def _parse_direction_content(content: str) -> dict[str, str]:
     front = ""
     back = ""
-    visual_lines: list[str] = []
-    in_visual = False
+    hint_lines: list[str] = []
+    in_hint = False
 
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped:
-            if in_visual:
-                in_visual = False
+            if in_hint:
+                in_hint = False
             continue
 
         if re.match(r"^Front:\s*", stripped, re.I):
-            in_visual = False
+            in_hint = False
             front = re.sub(r"^Front:\s*", "", stripped, flags=re.I)
         elif re.match(r"^Back:\s*", stripped, re.I):
-            in_visual = False
+            in_hint = False
             back = re.sub(r"^Back:\s*", "", stripped, flags=re.I)
         elif re.match(r"^Note:\s*", stripped, re.I):
-            in_visual = False
-        elif re.match(r"^Visual hint:\s*", stripped, re.I):
-            in_visual = True
-            rest = re.sub(r"^Visual hint:\s*", "", stripped, flags=re.I)
+            in_hint = False
+        elif re.match(r"^(?:Hint|Visual hint):\s*", stripped, re.I):
+            in_hint = True
+            rest = re.sub(r"^(?:Hint|Visual hint):\s*", "", stripped, flags=re.I)
             if rest:
-                visual_lines.append(rest)
-        elif in_visual:
-            visual_lines.append(stripped)
+                hint_lines.append(rest)
+        elif in_hint:
+            hint_lines.append(stripped)
         elif stripped.upper() in ("EN_DE", "DE_EN"):
             break
 
     return {
         "front": front,
         "back": back,
-        "visual_hint": normalize_text(" ".join(visual_lines)),
+        "hint": normalize_text(" ".join(hint_lines)),
     }
+
+
+def _block_hints(sections: dict[str, dict[str, str]]) -> dict[str, str]:
+    """Image hints are shared across directions; text hints stay per direction."""
+    shared_image = ""
+    for payload in sections.values():
+        value, hint_type = classify_hint(payload.get("hint", ""))
+        if hint_type == "image":
+            shared_image = value
+            break
+
+    if shared_image:
+        return {direction: shared_image for direction in sections}
+
+    return {direction: payload.get("hint", "") for direction, payload in sections.items()}
 
 
 def parse_cloze_block(block: str) -> list[dict]:
@@ -132,6 +147,7 @@ def parse_cloze_block(block: str) -> list[dict]:
         sections.get("en_de", {}).get("front", block[:80]),
         sections.get("de_en", {}).get("front", block[:80]),
     )
+    hints = _block_hints(sections)
 
     cards = []
     for direction, payload in sections.items():
@@ -141,7 +157,7 @@ def parse_cloze_block(block: str) -> list[dict]:
                     "direction": direction,
                     "front": payload["front"],
                     "back": payload["back"],
-                    "visual_hint": payload.get("visual_hint", ""),
+                    "hint": hints.get(direction, ""),
                     "group_key": group_key,
                     "deck": "phrase_lexicon",
                     "source": "cloze",
