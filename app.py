@@ -12,7 +12,7 @@ from sync_service import run_sync
 from parser import HINTS_DIR, doc_source
 
 app = Flask(__name__)
-BUILD_ID = os.environ.get("BUILD_ID", "3d21deb-1")
+BUILD_ID = os.environ.get("BUILD_ID", "04a37d9-2")
 
 
 @app.after_request

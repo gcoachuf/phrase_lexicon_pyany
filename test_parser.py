@@ -46,6 +46,30 @@ def test_back_underline_from_html():
     assert de_en["back_html"] == "<strong>contribute</strong> more"
 
 
+def test_back_underline_keeps_styles_outside_trainer_region():
+    doc = f"""{TRAINER_START_MARKER}
+{EXAMPLE.strip()}
+{TRAINER_END_MARKER}"""
+    html = f"""<html><head><style>.c2{{text-decoration:underline}}</style></head><body>
+{TRAINER_START_MARKER}
+<p><span>Back: </span><span class="c2">beitragen</span></p>
+<p><span>Back: </span><span class="c2">contribute</span><span> more</span></p>
+{TRAINER_END_MARKER}
+</body></html>"""
+    text, _ = _extract_trainer_region(doc)
+    html_region, _ = _extract_trainer_region(html)
+    cards = parse_cloze_cards(text)
+    merge_html_back_formatting(cards, html_region, style_html=html)
+    en_de = next(c for c in cards if c["direction"] == "en_de")
+    de_en = next(c for c in cards if c["direction"] == "de_en")
+    assert en_de["back_html"] == "<strong>beitragen</strong>"
+    assert de_en["back_html"] == "<strong>contribute</strong> more"
+
+    broken = parse_cloze_cards(text)
+    merge_html_back_formatting(broken, html_region)
+    assert broken[0].get("back_html", "") == ""
+
+
 NOTE_BLOCK = """---
 DE_EN
 Front: Keine _____ [noun] _____ [preposition] anderen Menschen zu haben bedeutet Freiheit.
@@ -108,6 +132,7 @@ outside back
 if __name__ == "__main__":
     test_cloze_parse()
     test_back_underline_from_html()
+    test_back_underline_keeps_styles_outside_trainer_region()
     test_note_not_in_back()
     test_note_on_own_line_not_in_back()
     test_trainer_region_markers()

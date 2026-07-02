@@ -421,8 +421,12 @@ def _fragment_to_back_html(fragment: str, underline_classes: set[str]) -> str:
     return strip_back_html(converter.result())
 
 
-def merge_html_back_formatting(cards: list[dict], html: str) -> None:
-    underline_classes = _underline_classes(html)
+def merge_html_back_formatting(
+    cards: list[dict], html: str, style_html: str | None = None
+) -> None:
+    """Apply underline formatting from Google Doc HTML exports."""
+    style_source = style_html or html
+    underline_classes = _underline_classes(style_source)
     fragments = _extract_html_back_fragments(html)
     for card, fragment in zip(cards, fragments):
         formatted = _fragment_to_back_html(fragment, underline_classes)
@@ -575,10 +579,12 @@ def parse_gwod_cards(text: str) -> list[dict]:
 
 def parse_all(text: str | None = None) -> list[dict]:
     html: str | None = None
+    html_styles: str | None = None
     if text is None:
         text = fetch_doc()
         try:
             html = fetch_doc_html()
+            html_styles = html
         except Exception:
             html = None
 
@@ -589,7 +595,7 @@ def parse_all(text: str | None = None) -> list[dict]:
     cloze = parse_cloze_cards(text)
     if html and cloze:
         merge_html_image_hints(cloze, html)
-        merge_html_back_formatting(cloze, html)
+        merge_html_back_formatting(cloze, html, style_html=html_styles or html)
     legacy = parse_phrase_lexicon_legacy(text) if not cloze and not trainer_marked else []
     gwod = parse_gwod_cards(text) if not trainer_marked else []
     cards = cloze + legacy + gwod
