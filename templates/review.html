@@ -30,9 +30,9 @@
     <div id="stats" class="stats">
       <label class="stat-learn" for="session-goal">
         Lernen
-        <input id="session-goal" type="number" min="1" max="999" value="{{ stats.due if stats.due > 0 else 10 }}">
+        <input id="session-goal" type="number" min="1" max="999" value="{{ session_goal_default }}">
       </label>
-      <span id="session-progress" class="session-progress">0 / {{ stats.due if stats.due > 0 else 10 }}</span>
+      <span id="session-progress" class="session-progress">0 / {{ session_goal_default }}</span>
       <span class="stat-available"><strong id="stat-available">{{ stats.due }}</strong> verfügbar</span>
       <span><strong id="stat-total">{{ stats.total }}</strong> Karten</span>
       <span><strong id="stat-new">{{ stats.new }}</strong> neu</span>

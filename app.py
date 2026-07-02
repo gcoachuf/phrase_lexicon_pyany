@@ -10,7 +10,7 @@ from sync_service import run_sync
 from parser import HINTS_DIR, doc_source
 
 app = Flask(__name__)
-BUILD_ID = os.environ.get("BUILD_ID", "2426276-1")
+BUILD_ID = os.environ.get("BUILD_ID", "1e54c96-1")
 
 
 @app.after_request
@@ -35,7 +35,13 @@ def index():
     if direction not in ("en_de", "de_en"):
         direction = "de_en"
     stats = db.get_stats(direction)
-    return render_template("review.html", stats=stats, direction=direction, build_id=BUILD_ID)
+    return render_template(
+        "review.html",
+        stats=stats,
+        direction=direction,
+        build_id=BUILD_ID,
+        session_goal_default=5,
+    )
 
 
 @app.route("/api/sync", methods=["POST"])
