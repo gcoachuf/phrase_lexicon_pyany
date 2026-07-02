@@ -8,7 +8,17 @@ import urllib.request
 DOC_ID = os.environ.get(
     "GOOGLE_DOC_ID", "1TX2Qd17AJ9nQ_A3QUtNSNbQ5WEqt4hfFVoaAUD_ifCw"
 )
-EXPORT_URL = f"https://docs.google.com/document/d/{DOC_ID}/export?format=txt"
+DOC_TAB = os.environ.get("GOOGLE_DOC_TAB", "").strip()
+
+
+def export_url(doc_id: str = DOC_ID, doc_tab: str = DOC_TAB) -> str:
+    url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
+    if doc_tab:
+        url += f"&tab={doc_tab}"
+    return url
+
+
+EXPORT_URL = export_url()
 
 ENGLISH_LINE = re.compile(
     r"^(to |a |an |the |no |slow |social |free |fuel |perception|please )",
