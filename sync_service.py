@@ -41,10 +41,11 @@ def run_sync(force: bool = False) -> dict:
         }
 
     cards = parse_all()
-    added, total = db.import_cards(cards)
+    added, skipped, total = db.import_cards(cards)
     now = _now_iso()
     db.set_meta("last_sync_at", now)
     db.set_meta("last_sync_added", str(added))
+    db.set_meta("last_sync_skipped", str(skipped))
     db.set_meta("last_sync_parsed", str(len(cards)))
 
     return {
@@ -53,6 +54,7 @@ def run_sync(force: bool = False) -> dict:
         "skipped": False,
         "parsed": len(cards),
         "added": added,
+        "skipped_duplicates": skipped,
         "total": total,
         "stats": db.get_stats(),
         "last_sync_at": now,

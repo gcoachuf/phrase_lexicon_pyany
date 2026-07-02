@@ -4,6 +4,7 @@ import os
 import sqlite3
 from pathlib import Path
 
+from parser import card_identity, normalize_card
 from scheduler import initial_card_state, today
 
 _data_dir = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
@@ -81,12 +82,46 @@ def set_meta(key: str, value: str) -> None:
         )
 
 
-def import_cards(cards: list[dict]) -> tuple[int, int]:
-    """Insert new cards. Returns (added, total)."""
+def _load_existing_identities(conn: sqlite3.Connection) -> set[tuple[str, str, str]]:
+    rows = conn.execute("SELECT direction, front, back FROM cards").fetchall()
+    return {card_identity({"direction": r["direction"], "front": r["front"], "back": r["back"]}) for r in rows}
+
+
+def _remove_duplicate_cards(conn: sqlite3.Connection) -> int:
+    """Remove exact duplicates, keeping the oldest card per identity."""
+    cursor = conn.execute(
+        """
+        DELETE FROM cards
+        WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM cards
+            GROUP BY direction, front, back
+        )
+        """
+    )
+    return cursor.rowcount
+
+
+def import_cards(cards: list[dict]) -> tuple[int, int, int]:
+    """Insert new cards. Returns (added, skipped, total)."""
     init_db()
     added = 0
+    skipped = 0
     with connect() as conn:
+        _remove_duplicate_cards(conn)
+        existing = _load_existing_identities(conn)
+        seen_batch: set[tuple[str, str, str]] = set()
+
         for card in cards:
+            normalized = normalize_card(card)
+            identity = card_identity(normalized)
+
+            if identity in seen_batch or identity in existing:
+                skipped += 1
+                seen_batch.add(identity)
+                continue
+
+            seen_batch.add(identity)
             state = initial_card_state()
             cursor = conn.execute(
                 """
@@ -96,12 +131,12 @@ def import_cards(cards: list[dict]) -> tuple[int, int]:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    card["direction"],
-                    card["front"],
-                    card["back"],
-                    card.get("group_key", ""),
-                    card["deck"],
-                    card["source"],
+                    normalized["direction"],
+                    normalized["front"],
+                    normalized["back"],
+                    normalized.get("group_key", ""),
+                    normalized["deck"],
+                    normalized["source"],
                     state["interval"],
                     state["ease"],
                     state["due"],
@@ -111,8 +146,12 @@ def import_cards(cards: list[dict]) -> tuple[int, int]:
             )
             if cursor.rowcount:
                 added += 1
+                existing.add(identity)
+            else:
+                skipped += 1
+
         total = conn.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
-    return added, total
+    return added, skipped, total
 
 
 def get_card_by_id(card_id: int) -> dict | None:

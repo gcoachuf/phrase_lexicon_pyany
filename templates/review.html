@@ -28,9 +28,14 @@
     </div>
 
     <div id="stats" class="stats">
-      <span><strong id="stat-due">{{ stats.due }}</strong> due</span>
-      <span><strong id="stat-total">{{ stats.total }}</strong> cards</span>
-      <span><strong id="stat-new">{{ stats.new }}</strong> new</span>
+      <label class="stat-learn" for="session-goal">
+        Lernen
+        <input id="session-goal" type="number" min="1" max="999" value="{{ stats.due if stats.due > 0 else 10 }}">
+      </label>
+      <span id="session-progress" class="session-progress">0 / {{ stats.due if stats.due > 0 else 10 }}</span>
+      <span class="stat-available"><strong id="stat-available">{{ stats.due }}</strong> verfügbar</span>
+      <span><strong id="stat-total">{{ stats.total }}</strong> Karten</span>
+      <span><strong id="stat-new">{{ stats.new }}</strong> neu</span>
     </div>
 
     <p id="sync-status" class="sync-status">Sync adds new phrases only — your progress is kept.</p>
@@ -42,7 +47,7 @@
       <div class="card" id="card">
         <div class="card-front" id="card-front"></div>
         <div class="card-back hidden" id="card-back"></div>
-        <button id="btn-reveal" class="reveal-btn">Show answer</button>
+        <button id="btn-reveal" class="reveal-btn">Check answer</button>
       </div>
 
       <div id="rating-area" class="rating-area hidden">
@@ -54,8 +59,8 @@
     </main>
 
     <div id="empty-state" class="empty-state hidden">
-      <p>No cards due right now.</p>
-      <p class="hint">Click <strong>Sync from Google Doc</strong> to import phrases, or check back later.</p>
+      <p id="empty-title">Gerade keine Karten fällig.</p>
+      <p class="hint" id="empty-hint">Klicke auf <strong>Sync from Google Doc</strong>, um Phrasen zu importieren.</p>
     </div>
 
     <div id="loading-state" class="loading-state">
@@ -92,6 +97,8 @@
     let currentCard = null;
     let resetStep = 0;
     let resetMode = "progress";
+    let sessionDone = 0;
+    let cardsAvailable = {{ stats.due }};
 
     const RESET_CONFIG = {
       progress: {
@@ -133,9 +140,13 @@
       ratingArea: document.getElementById("rating-area"),
       message: document.getElementById("message"),
       syncStatus: document.getElementById("sync-status"),
-      statDue: document.getElementById("stat-due"),
+      sessionGoal: document.getElementById("session-goal"),
+      sessionProgress: document.getElementById("session-progress"),
+      statAvailable: document.getElementById("stat-available"),
       statTotal: document.getElementById("stat-total"),
       statNew: document.getElementById("stat-new"),
+      emptyTitle: document.getElementById("empty-title"),
+      emptyHint: document.getElementById("empty-hint"),
       resetModal: document.getElementById("reset-modal"),
       resetStepText: document.getElementById("reset-step-text"),
       resetStep3: document.getElementById("reset-step-3"),
@@ -148,16 +159,50 @@
 
     function setDirection(next) {
       direction = next;
+      sessionDone = 0;
       document.querySelectorAll(".dir-btn").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.direction === direction);
       });
+      updateSessionProgress();
       loadNextCard();
     }
 
+    function getSessionGoal() {
+      const value = Number.parseInt(els.sessionGoal.value, 10);
+      if (!Number.isFinite(value) || value < 1) return 1;
+      return Math.min(value, 999);
+    }
+
+    function updateSessionProgress() {
+      const goal = getSessionGoal();
+      els.sessionProgress.textContent = `${sessionDone} / ${goal}`;
+    }
+
     function updateStats(stats) {
-      els.statDue.textContent = stats.due;
+      cardsAvailable = stats.due;
+      els.statAvailable.textContent = stats.due;
       els.statTotal.textContent = stats.total;
       els.statNew.textContent = stats.new;
+      updateSessionProgress();
+    }
+
+    function isSessionComplete() {
+      return sessionDone >= getSessionGoal();
+    }
+
+    function showEmptyState(title, hint) {
+      currentCard = null;
+      els.cardArea.classList.add("hidden");
+      els.emptyState.classList.remove("hidden");
+      els.emptyTitle.textContent = title;
+      els.emptyHint.innerHTML = hint;
+    }
+
+    function showSessionComplete() {
+      showEmptyState(
+        `Session fertig — ${sessionDone} Karte${sessionDone === 1 ? "" : "n"} gelernt.`,
+        "Erhöhe die Zahl bei <strong>Lernen</strong>, um weiterzumachen, oder komm später wieder."
+      );
     }
 
     function formatSyncTime(iso) {
@@ -184,19 +229,80 @@
 
     function resetCardUi() {
       els.cardBack.classList.add("hidden");
+      els.cardBack.classList.remove("correct", "incorrect");
       els.btnReveal.classList.remove("hidden");
       els.ratingArea.classList.add("hidden");
     }
 
-    function formatCardText(text) {
+    function normalizeAnswer(value) {
+      return value.trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function renderCardFront(text) {
+      if (!text.includes("_____")) {
+        els.cardFront.textContent = text;
+        return;
+      }
+
+      els.cardFront.innerHTML = "";
       const parts = text.split("_____");
-      if (parts.length === 1) return text;
-      return parts
-        .map((part, index) => {
-          if (index === parts.length - 1) return part;
-          return `${part}<span class="blank">_____</span>`;
-        })
-        .join("");
+      parts.forEach((part, index) => {
+        els.cardFront.appendChild(document.createTextNode(part));
+        if (index < parts.length - 1) {
+          const input = document.createElement("input");
+          input.type = "text";
+          input.className = "cloze-input";
+          input.setAttribute("aria-label", "Your answer");
+          input.autocomplete = "off";
+          input.spellcheck = false;
+          els.cardFront.appendChild(input);
+        }
+      });
+
+      const input = els.cardFront.querySelector(".cloze-input");
+      if (input) {
+        setTimeout(() => input.focus(), 50);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            els.btnReveal.click();
+          }
+        });
+      }
+    }
+
+    function revealAnswer() {
+      const input = els.cardFront.querySelector(".cloze-input");
+      const hasCloze = Boolean(input);
+
+      if (hasCloze) {
+        const userAnswer = normalizeAnswer(input.value);
+        const expected = normalizeAnswer(currentCard.back);
+        const correct = userAnswer === expected;
+
+        input.disabled = true;
+        input.classList.add(correct ? "correct" : "incorrect");
+
+        els.cardBack.classList.toggle("correct", correct);
+        els.cardBack.classList.toggle("incorrect", !correct);
+        els.cardBack.innerHTML = correct
+          ? `✓ Correct: <strong>${escapeHtml(currentCard.back)}</strong>`
+          : `Answer: <strong>${escapeHtml(currentCard.back)}</strong>${userAnswer ? `<span class="your-answer"> (you wrote: ${escapeHtml(input.value.trim())})</span>` : ""}`;
+      } else {
+        els.cardBack.textContent = currentCard.back;
+      }
+
+      els.cardBack.classList.remove("hidden");
+      els.btnReveal.classList.add("hidden");
+      els.ratingArea.classList.remove("hidden");
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
     function renderCard(card) {
@@ -204,23 +310,34 @@
       resetCardUi();
       const dirLabel = card.direction === "de_en" ? "DE → EN" : "EN → DE";
       els.deckLabel.textContent = `${card.deck.replace("_", " ")} · ${dirLabel}`;
-      els.cardFront.innerHTML = formatCardText(card.front);
+      renderCardFront(card.front);
       els.cardBack.textContent = card.back;
+      els.btnReveal.textContent = card.front.includes("_____") ? "Check answer" : "Show answer";
       els.loadingState.classList.add("hidden");
       els.cardArea.classList.remove("hidden");
       els.emptyState.classList.add("hidden");
     }
 
     async function loadNextCard() {
+      if (isSessionComplete()) {
+        showSessionComplete();
+        return;
+      }
+
       const res = await fetch(`/api/next?direction=${direction}`);
       const data = await res.json();
       updateStats(data.stats);
       els.loadingState.classList.add("hidden");
 
       if (!data.card) {
-        currentCard = null;
-        els.cardArea.classList.add("hidden");
-        els.emptyState.classList.remove("hidden");
+        if (sessionDone > 0) {
+          showSessionComplete();
+        } else {
+          showEmptyState(
+            "Gerade keine Karten fällig.",
+            "Klicke auf <strong>Sync from Google Doc</strong>, um Phrasen zu importieren, oder komm später wieder."
+          );
+        }
         return;
       }
       renderCard(data.card);
@@ -249,8 +366,13 @@
         const addedMsg = data.added > 0
           ? `Added ${data.added} new phrase${data.added === 1 ? "" : "s"}. `
           : "No new phrases. ";
-        setSyncStatus(`${addedMsg}Last sync: ${when} · Progress kept`);
-        showMessage(`${addedMsg}(${data.total} cards total)`, "success");
+        const skippedMsg = data.skipped_duplicates
+          ? `${data.skipped_duplicates} duplicate${data.skipped_duplicates === 1 ? "" : "s"} skipped. `
+          : "";
+        setSyncStatus(`${addedMsg}${skippedMsg}Last sync: ${when} · Progress kept`);
+        showMessage(`${addedMsg}${skippedMsg}(${data.total} cards total)`, "success");
+        sessionDone = 0;
+        updateSessionProgress();
         await loadNextCard();
       } catch (err) {
         showMessage(err.message, "error");
@@ -272,6 +394,8 @@
         showMessage(data.error || "Review failed", "error");
         return;
       }
+      sessionDone += 1;
+      updateSessionProgress();
       await loadNextCard();
     }
 
@@ -332,6 +456,7 @@
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "Reset failed");
         closeResetModal();
+        sessionDone = 0;
         updateStats(data.stats);
         const count = data.reset ?? data.deleted ?? 0;
         showMessage(cfg.successMessage(count), "success");
@@ -348,6 +473,19 @@
     document.getElementById("btn-sync").addEventListener("click", syncDoc);
     document.getElementById("btn-reset-progress").addEventListener("click", () => openResetModal("progress"));
     document.getElementById("btn-reset-dict").addEventListener("click", () => openResetModal("dict"));
+    els.sessionGoal.addEventListener("change", () => {
+      sessionDone = 0;
+      updateSessionProgress();
+      loadNextCard();
+    });
+    els.sessionGoal.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sessionDone = 0;
+        updateSessionProgress();
+        loadNextCard();
+      }
+    });
     document.getElementById("btn-reset-cancel").addEventListener("click", closeResetModal);
     els.btnResetNext.addEventListener("click", advanceResetStep);
     els.resetModal.addEventListener("click", (e) => {
@@ -357,11 +495,7 @@
       if (e.key === "Enter") advanceResetStep();
     });
 
-    els.btnReveal.addEventListener("click", () => {
-      els.cardBack.classList.remove("hidden");
-      els.btnReveal.classList.add("hidden");
-      els.ratingArea.classList.remove("hidden");
-    });
+    els.btnReveal.addEventListener("click", () => revealAnswer());
     document.querySelectorAll(".rate-btn").forEach((btn) => {
       btn.addEventListener("click", () => submitReview(Number(btn.dataset.rating)));
     });

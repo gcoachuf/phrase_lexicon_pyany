@@ -26,6 +26,27 @@ def fetch_doc(url: str = EXPORT_URL) -> str:
         return resp.read().decode("utf-8")
 
 
+def normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip())
+
+
+def normalize_card(card: dict) -> dict:
+    direction = card["direction"].strip().lower()
+    if direction not in ("en_de", "de_en"):
+        direction = "en_de"
+    return {
+        **card,
+        "direction": direction,
+        "front": normalize_text(card["front"]),
+        "back": normalize_text(card["back"]),
+    }
+
+
+def card_identity(card: dict) -> tuple[str, str, str]:
+    normalized = normalize_card(card)
+    return normalized["direction"], normalized["front"], normalized["back"]
+
+
 def _group_key(en_de_front: str, de_en_front: str) -> str:
     raw = f"{en_de_front}|{de_en_front}".encode("utf-8")
     return hashlib.sha1(raw).hexdigest()[:16]
@@ -175,8 +196,8 @@ def parse_all(text: str | None = None) -> list[dict]:
     seen: set[tuple[str, str, str]] = set()
     unique: list[dict] = []
     for card in cards:
-        key = (card["direction"], card["front"], card["back"])
+        key = card_identity(card)
         if key not in seen:
             seen.add(key)
-            unique.append(card)
+            unique.append(normalize_card(card))
     return unique

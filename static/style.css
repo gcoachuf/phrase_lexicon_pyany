@@ -106,10 +106,41 @@ header h1 {
 
 .stats {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
   color: var(--muted);
   font-size: 0.9rem;
   margin-bottom: 1.25rem;
+}
+
+.stat-learn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stat-learn input {
+  width: 4rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+}
+
+.session-progress {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.stat-available {
+  font-size: 0.85rem;
 }
 
 .stats strong {
@@ -173,17 +204,61 @@ header h1 {
 
 .card-front {
   font-size: 1.35rem;
-  line-height: 1.5;
+  line-height: 1.75;
   font-weight: 600;
   white-space: pre-wrap;
 }
 
-.card-front .blank,
-.card-back .blank {
+.cloze-input {
   display: inline-block;
-  min-width: 4rem;
+  min-width: 6rem;
+  max-width: min(100%, 12rem);
+  margin: 0 0.15rem;
+  padding: 0.2rem 0.45rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg);
+  border: none;
   border-bottom: 2px solid var(--accent);
-  color: var(--accent);
+  border-radius: 4px 4px 0 0;
+  text-align: center;
+  vertical-align: baseline;
+}
+
+.cloze-input:focus {
+  outline: 2px solid rgba(79, 140, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.cloze-input.correct {
+  border-bottom-color: var(--success);
+  color: var(--success);
+}
+
+.cloze-input.incorrect {
+  border-bottom-color: var(--danger);
+  color: var(--danger);
+}
+
+.card-back.correct {
+  color: var(--success);
+}
+
+.card-back.incorrect {
+  color: var(--danger);
+}
+
+.card-back .your-answer {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.card-back strong {
+  color: inherit;
 }
 
 .card-back {
@@ -366,7 +441,8 @@ header h1 {
   .dir-btn { flex: 1; }
   .sync-btn { width: 100%; }
   .card { padding: 1.5rem 1rem; min-height: 200px; }
-  .card-front { font-size: 1.3rem; }
+  .card-front { font-size: 1.2rem; }
+  .cloze-input { min-width: 5rem; max-width: 100%; font-size: 1.1rem; }
   .card-back { font-size: 1.2rem; }
   .rating-area { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
   .rate-btn { min-height: 56px; font-size: 1rem; }
