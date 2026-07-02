@@ -250,6 +250,11 @@
       });
     }
 
+    function formatDocSource(source) {
+      if (!source?.doc_tab) return "";
+      return `Tab ${source.doc_tab} · `;
+    }
+
     function setSyncStatus(text) {
       els.syncStatus.textContent = text;
     }
@@ -424,7 +429,8 @@
           updateDirectionButtons(currentCard);
         }
         const when = formatSyncTime(data.last_sync_at);
-        setSyncStatus(`Last sync: ${when} · Sync adds new phrases only — progress is kept`);
+        const tabLabel = formatDocSource(data.doc_source);
+        setSyncStatus(`${tabLabel}Last sync: ${when} · Sync adds new phrases only — progress is kept`);
       }
     }
 
@@ -447,7 +453,8 @@
         const progressMsg = data.added > 0 || data.skipped_duplicates
           ? "Fortschritt bleibt erhalten."
           : "Sync fügt nur neue Phrasen hinzu — Fortschritt bleibt erhalten.";
-        setSyncStatus(`${addedMsg}${skippedMsg}Last sync: ${when} · ${progressMsg}`);
+        const tabLabel = formatDocSource(data.doc_source);
+        setSyncStatus(`${addedMsg}${skippedMsg}${tabLabel}Last sync: ${when} · ${progressMsg}`);
         showMessage(`${addedMsg}${skippedMsg}(${data.total} cards total)`, "success");
         sessionDone = 0;
         updateSessionProgress();

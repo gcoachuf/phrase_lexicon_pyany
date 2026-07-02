@@ -7,18 +7,47 @@ import urllib.request
 
 DOC_ID = os.environ.get(
     "GOOGLE_DOC_ID", "1TX2Qd17AJ9nQ_A3QUtNSNbQ5WEqt4hfFVoaAUD_ifCw"
-)
-DOC_TAB = os.environ.get("GOOGLE_DOC_TAB", "t.x0jh4b5vn4op").strip()
+).strip()
+DEFAULT_DOC_TAB = "t.x0jh4b5vn4op"
 
 
-def export_url(doc_id: str = DOC_ID, doc_tab: str = DOC_TAB) -> str:
+def normalize_tab_id(tab: str) -> str:
+    tab = tab.strip()
+    if not tab:
+        return ""
+    if not tab.startswith("t."):
+        tab = f"t.{tab}"
+    return tab
+
+
+def current_doc_tab() -> str:
+    return normalize_tab_id(os.environ.get("GOOGLE_DOC_TAB", DEFAULT_DOC_TAB))
+
+
+def export_url(doc_id: str | None = None, doc_tab: str | None = None) -> str:
+    doc_id = (doc_id or DOC_ID).strip()
+    tab = normalize_tab_id(doc_tab if doc_tab is not None else current_doc_tab())
     url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
-    if doc_tab:
-        url += f"&tab={doc_tab}"
+    if tab:
+        url += f"&tab={tab}"
     return url
 
 
-EXPORT_URL = export_url()
+def doc_source() -> dict[str, str]:
+    tab = current_doc_tab()
+    return {
+        "doc_id": DOC_ID,
+        "doc_tab": tab,
+        "export_url": export_url(),
+    }
+
+
+def fetch_doc(url: str | None = None) -> str:
+    if url is None:
+        url = export_url()
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        return resp.read().decode("utf-8")
+
 
 ENGLISH_LINE = re.compile(
     r"^(to |a |an |the |no |slow |social |free |fuel |perception|please )",
@@ -31,11 +60,6 @@ IMAGE_URL_RE = re.compile(
     r"|(?:docs\.google\.com|googleusercontent\.com|ggpht\.com)[^\s<>\"']*)",
     re.IGNORECASE,
 )
-
-
-def fetch_doc(url: str = EXPORT_URL) -> str:
-    with urllib.request.urlopen(url, timeout=30) as resp:
-        return resp.read().decode("utf-8")
 
 
 def normalize_text(text: str) -> str:

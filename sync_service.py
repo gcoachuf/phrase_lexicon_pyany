@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 
 import db
-from parser import parse_all
+from parser import doc_source, parse_all
 
 SYNC_INTERVAL_MINUTES = int(os.environ.get("SYNC_INTERVAL_MINUTES", "10"))
 
@@ -43,10 +43,12 @@ def run_sync(force: bool = False) -> dict:
     cards = parse_all()
     added, skipped, total = db.import_cards(cards)
     now = _now_iso()
+    source = doc_source()
     db.set_meta("last_sync_at", now)
     db.set_meta("last_sync_added", str(added))
     db.set_meta("last_sync_skipped", str(skipped))
     db.set_meta("last_sync_parsed", str(len(cards)))
+    db.set_meta("last_sync_doc_tab", source["doc_tab"])
 
     return {
         "ok": True,
@@ -58,4 +60,5 @@ def run_sync(force: bool = False) -> dict:
         "total": total,
         "stats": db.get_stats(),
         "last_sync_at": now,
+        "doc_source": source,
     }

@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 import db
 from scheduler import review_card
 from sync_service import run_sync
+from parser import doc_source
 
 app = Flask(__name__)
 
@@ -101,6 +102,7 @@ def status():
             "stats": db.get_stats(direction),
             "direction_counts": db.get_direction_counts(),
             "last_sync_at": db.get_meta("last_sync_at"),
+            "doc_source": doc_source(),
         }
     )
 
