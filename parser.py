@@ -2,9 +2,11 @@
 
 import hashlib
 import base64
+import html as html_module
 import os
 import re
 import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
 
 DOC_ID = os.environ.get(
@@ -108,11 +110,15 @@ def normalize_card(card: dict) -> dict:
         direction = "en_de"
     hint = normalize_text(card.get("hint", card.get("visual_hint", "")))
     hint_value, hint_type = classify_hint(hint)
+    back_html = card.get("back_html", "")
+    if back_html:
+        back_html = strip_back_html(back_html)
     return {
         **card,
         "direction": direction,
         "front": normalize_text(card["front"]),
         "back": normalize_text(card["back"]),
+        "back_html": back_html,
         "hint": hint_value,
         "hint_type": hint_type,
     }
@@ -240,6 +246,109 @@ def merge_html_image_hints(cards: list[dict], html: str) -> None:
         card["hint"] = _persist_hint_src(images[img_idx])
         img_idx += 1
     _apply_group_image_hints(cards)
+
+
+UNDERLINE_CLASS_RE = re.compile(
+    r"\.(c\d+)\{[^}]*text-decoration:\s*underline[^}]*\}",
+    re.IGNORECASE,
+)
+
+
+def _underline_classes(html: str) -> set[str]:
+    return set(UNDERLINE_CLASS_RE.findall(html))
+
+
+class _BackHtmlConverter(HTMLParser):
+    def __init__(self, underline_classes: set[str]):
+        super().__init__(convert_charrefs=True)
+        self._underline_classes = underline_classes
+        self._stack: list[str] = []
+        self._parts: list[str] = []
+
+    def _span_is_underline(self, attrs: list[tuple[str, str | None]]) -> bool:
+        attr_map = {key: value or "" for key, value in attrs}
+        classes = attr_map.get("class", "").split()
+        if self._underline_classes.intersection(classes):
+            return True
+        style = attr_map.get("style", "").replace(" ", "")
+        return "text-decoration:underline" in style
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "span":
+            if self._span_is_underline(attrs):
+                self._parts.append("<u>")
+                self._stack.append("u")
+            else:
+                self._stack.append("n")
+        elif tag == "u":
+            self._parts.append("<u>")
+            self._stack.append("u")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "span" and self._stack:
+            kind = self._stack.pop()
+            if kind == "u":
+                self._parts.append("</u>")
+        elif tag == "u" and self._stack and self._stack[-1] == "u":
+            self._stack.pop()
+            self._parts.append("</u>")
+
+    def handle_data(self, data: str) -> None:
+        text = data.replace("\xa0", " ")
+        self._parts.append(html_module.escape(text))
+
+    def result(self) -> str:
+        while self._stack:
+            kind = self._stack.pop()
+            if kind == "u":
+                self._parts.append("</u>")
+        return re.sub(r"\s+", " ", "".join(self._parts)).strip()
+
+
+def strip_back_html(back_html: str) -> str:
+    """Keep only <u> markup for safe answer rendering."""
+    if not back_html:
+        return ""
+    text = re.sub(r"<(?!/?u>)[^>]+>", "", back_html, flags=re.IGNORECASE)
+    if "<u>" not in text:
+        return ""
+    return text
+
+
+def plain_back_text(back: str, back_html: str = "") -> str:
+    if back_html:
+        return re.sub(r"</?u>", "", back_html, flags=re.IGNORECASE)
+    return back
+
+
+def _extract_html_back_fragments(html: str) -> list[str]:
+    fragments: list[str] = []
+    for match in re.finditer(r"Back:\s*", html, re.IGNORECASE):
+        rest = html[match.end() :]
+        if rest.startswith("</span>"):
+            rest = rest[len("</span>") :]
+            end = re.search(r"</p>\s*<p", rest, re.IGNORECASE)
+            fragment = rest[: end.start() if end else len(rest)]
+        else:
+            end = re.search(r"</span>", rest, re.IGNORECASE)
+            fragment = rest[: end.start() if end else len(rest)]
+        fragments.append(fragment)
+    return fragments
+
+
+def _fragment_to_back_html(fragment: str, underline_classes: set[str]) -> str:
+    converter = _BackHtmlConverter(underline_classes)
+    converter.feed(fragment)
+    return strip_back_html(converter.result())
+
+
+def merge_html_back_formatting(cards: list[dict], html: str) -> None:
+    underline_classes = _underline_classes(html)
+    fragments = _extract_html_back_fragments(html)
+    for card, fragment in zip(cards, fragments):
+        formatted = _fragment_to_back_html(fragment, underline_classes)
+        if formatted:
+            card["back_html"] = formatted
 
 
 def parse_cloze_block(block: str) -> list[dict]:
@@ -396,6 +505,7 @@ def parse_all(text: str | None = None) -> list[dict]:
     cloze = parse_cloze_cards(text)
     if html and cloze:
         merge_html_image_hints(cloze, html)
+        merge_html_back_formatting(cloze, html)
     legacy = parse_phrase_lexicon_legacy(text) if not cloze else []
     cards = cloze + legacy + parse_gwod_cards(text)
 

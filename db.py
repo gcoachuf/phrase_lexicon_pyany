@@ -51,6 +51,10 @@ def _migrate_cards_table(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "ALTER TABLE cards ADD COLUMN visual_hint TEXT NOT NULL DEFAULT ''"
             )
+        if "back_html" not in columns:
+            conn.execute(
+                "ALTER TABLE cards ADD COLUMN back_html TEXT NOT NULL DEFAULT ''"
+            )
         return
 
     conn.execute("DROP TABLE IF EXISTS cards")
@@ -136,15 +140,21 @@ def import_cards(cards: list[dict]) -> tuple[int, int, int]:
             identity = card_identity(normalized)
 
             if identity in seen_batch or identity in existing:
-                if normalized.get("hint"):
+                hint = normalized.get("hint", "")
+                back_html = normalized.get("back_html", "")
+                if hint or back_html:
                     conn.execute(
                         """
                         UPDATE cards
-                        SET visual_hint = ?
+                        SET visual_hint = CASE WHEN ? != '' THEN ? ELSE visual_hint END,
+                            back_html = CASE WHEN ? != '' THEN ? ELSE back_html END
                         WHERE direction = ? AND front = ? AND back = ?
                         """,
                         (
-                            normalized.get("hint", ""),
+                            hint,
+                            hint,
+                            back_html,
+                            back_html,
                             normalized["direction"],
                             normalized["front"],
                             normalized["back"],
@@ -159,9 +169,9 @@ def import_cards(cards: list[dict]) -> tuple[int, int, int]:
             cursor = conn.execute(
                 """
                 INSERT OR IGNORE INTO cards
-                    (direction, front, back, group_key, deck, source, visual_hint,
+                    (direction, front, back, group_key, deck, source, visual_hint, back_html,
                      interval, ease, due, reps, lapses)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     normalized["direction"],
@@ -171,6 +181,7 @@ def import_cards(cards: list[dict]) -> tuple[int, int, int]:
                     normalized["deck"],
                     normalized["source"],
                     normalized.get("hint", normalized.get("visual_hint", "")),
+                    normalized.get("back_html", ""),
                     state["interval"],
                     state["ease"],
                     state["due"],
@@ -365,11 +376,13 @@ def _group_directions(conn: sqlite3.Connection, group_key: str, direction: str) 
 def _row_to_card(row: sqlite3.Row, conn: sqlite3.Connection) -> dict:
     raw_hint = row["visual_hint"] if "visual_hint" in row.keys() else ""
     hint_value, hint_type = classify_hint(raw_hint)
+    back_html = row["back_html"] if "back_html" in row.keys() else ""
     paired_directions = _group_directions(conn, row["group_key"], row["direction"])
     return {
         "id": row["id"],
         "front": row["front"],
         "back": row["back"],
+        "back_html": back_html,
         "deck": row["deck"],
         "direction": row["direction"],
         "group_key": row["group_key"],

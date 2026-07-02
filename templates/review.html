@@ -301,7 +301,7 @@
     }
 
     function resizeClozeInput(input) {
-      const minCh = 2;
+      const minCh = 8;
       const length = Math.max(minCh, input.value.length + 1);
       input.style.width = `${length}ch`;
     }
@@ -347,7 +347,7 @@
 
       if (hasCloze) {
         const userAnswer = normalizeAnswer(input.value);
-        const expected = normalizeAnswer(currentCard.back);
+        const expected = normalizeAnswer(stripHtmlTags(currentCard.back_html || currentCard.back));
         const correct = userAnswer === expected;
 
         input.disabled = true;
@@ -355,12 +355,13 @@
 
         els.cardBack.classList.toggle("correct", correct);
         els.cardBack.classList.toggle("incorrect", !correct);
+        const answerHtml = formatBackDisplay(currentCard);
         els.cardBack.innerHTML = correct
-          ? `<span class="answer-label">✓ Correct</span><span class="answer-text">${escapeHtml(currentCard.back)}</span>`
-          : `<span class="answer-label">Answer</span><span class="answer-text">${escapeHtml(currentCard.back)}</span>${userAnswer ? `<span class="your-answer"> (you wrote: ${escapeHtml(input.value.trim())})</span>` : ""}`;
+          ? `<span class="answer-label">✓ Correct</span><span class="answer-text">${answerHtml}</span>`
+          : `<span class="answer-label">Answer</span><span class="answer-text">${answerHtml}</span>${userAnswer ? `<span class="your-answer"> (you wrote: ${escapeHtml(input.value.trim())})</span>` : ""}`;
       } else {
         els.cardBack.classList.remove("correct", "incorrect");
-        els.cardBack.textContent = currentCard.back;
+        els.cardBack.innerHTML = `<span class="answer-text">${formatBackDisplay(currentCard)}</span>`;
       }
 
       els.cardBack.classList.remove("hidden");
@@ -374,6 +375,17 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    function stripHtmlTags(text) {
+      return text.replace(/<[^>]+>/g, "");
+    }
+
+    function formatBackDisplay(card) {
+      if (card.back_html) {
+        return card.back_html.replace(/<(?!\/?u>)[^>]+>/gi, "");
+      }
+      return escapeHtml(card.back);
     }
 
     function toggleHint() {
