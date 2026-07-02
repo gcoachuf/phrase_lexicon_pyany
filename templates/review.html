@@ -190,6 +190,15 @@
       return sessionDone >= getSessionGoal();
     }
 
+    function onSessionGoalChanged() {
+      updateSessionProgress();
+      if (sessionDone >= getSessionGoal()) {
+        if (!currentCard) showSessionComplete();
+        return;
+      }
+      if (!currentCard) loadNextCard();
+    }
+
     function showEmptyState(title, hint) {
       currentCard = null;
       els.cardArea.classList.add("hidden");
@@ -473,17 +482,11 @@
     document.getElementById("btn-sync").addEventListener("click", syncDoc);
     document.getElementById("btn-reset-progress").addEventListener("click", () => openResetModal("progress"));
     document.getElementById("btn-reset-dict").addEventListener("click", () => openResetModal("dict"));
-    els.sessionGoal.addEventListener("change", () => {
-      sessionDone = 0;
-      updateSessionProgress();
-      loadNextCard();
-    });
+    els.sessionGoal.addEventListener("change", onSessionGoalChanged);
     els.sessionGoal.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        sessionDone = 0;
-        updateSessionProgress();
-        loadNextCard();
+        onSessionGoalChanged();
       }
     });
     document.getElementById("btn-reset-cancel").addEventListener("click", closeResetModal);
