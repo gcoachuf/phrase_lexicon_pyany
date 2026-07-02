@@ -104,6 +104,23 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip())
 
 
+def _strip_after_markers(text: str, markers: tuple[str, ...] = ("Note:", "Hint:", "Visual hint:")) -> str:
+    """Remove trailing field sections accidentally merged into a line."""
+    cleaned = text
+    for marker in markers:
+        match = re.search(rf"\s{re.escape(marker)}\s*", cleaned, re.IGNORECASE)
+        if match:
+            cleaned = cleaned[: match.start()]
+    return cleaned.strip()
+
+
+def _trim_html_fragment_at_markers(fragment: str) -> str:
+    match = re.search(r"Note:\s*|Hint:\s*|Visual hint:\s*|Front:\s*", fragment, re.IGNORECASE)
+    if match:
+        fragment = fragment[: match.start()]
+    return fragment
+
+
 def normalize_card(card: dict) -> dict:
     direction = card["direction"].strip().lower()
     if direction not in ("en_de", "de_en"):
@@ -117,8 +134,9 @@ def normalize_card(card: dict) -> dict:
         **card,
         "direction": direction,
         "front": normalize_text(card["front"]),
-        "back": normalize_text(card["back"]),
+        "back": normalize_text(_strip_after_markers(card["back"])),
         "back_html": back_html,
+        "note": normalize_text(card.get("note", "")),
         "hint": hint_value,
         "hint_type": hint_type,
     }
@@ -158,37 +176,78 @@ def _group_key(en_de_front: str, de_en_front: str) -> str:
 def _parse_direction_content(content: str) -> dict[str, str]:
     front = ""
     back = ""
+    note_lines: list[str] = []
     hint_lines: list[str] = []
     in_hint = False
+    in_back = False
+    in_note = False
+
+    def _split_inline_note(text: str) -> tuple[str, str | None]:
+        match = re.search(r"\sNote:\s*", text, re.IGNORECASE)
+        if not match:
+            return _strip_after_markers(text), None
+        return text[: match.start()].strip(), text[match.end() :].strip()
 
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped:
             if in_hint:
                 in_hint = False
+            if in_note:
+                in_note = False
             continue
 
         if re.match(r"^Front:\s*", stripped, re.I):
             in_hint = False
+            in_back = False
+            in_note = False
             front = re.sub(r"^Front:\s*", "", stripped, flags=re.I)
         elif re.match(r"^Back:\s*", stripped, re.I):
             in_hint = False
-            back = re.sub(r"^Back:\s*", "", stripped, flags=re.I)
+            in_note = False
+            in_back = True
+            back_part, inline_note = _split_inline_note(
+                re.sub(r"^Back:\s*", "", stripped, flags=re.I)
+            )
+            back = back_part
+            if inline_note:
+                note_lines.append(inline_note)
+                in_back = False
+                in_note = True
         elif re.match(r"^Note:\s*", stripped, re.I):
             in_hint = False
+            in_back = False
+            in_note = True
+            rest = re.sub(r"^Note:\s*", "", stripped, flags=re.I)
+            if rest:
+                note_lines.append(rest)
         elif re.match(r"^(?:Hint|Visual hint):\s*", stripped, re.I):
+            in_back = False
+            in_note = False
             in_hint = True
             rest = re.sub(r"^(?:Hint|Visual hint):\s*", "", stripped, flags=re.I)
             if rest:
                 hint_lines.append(rest)
         elif in_hint:
             hint_lines.append(stripped)
+        elif in_note:
+            note_lines.append(stripped)
+        elif in_back:
+            back_part, inline_note = _split_inline_note(stripped)
+            if inline_note:
+                back = normalize_text(f"{back} {back_part}")
+                note_lines.append(inline_note)
+                in_back = False
+                in_note = True
+            else:
+                back = normalize_text(f"{back} {back_part}")
         elif stripped.upper() in ("EN_DE", "DE_EN"):
             break
 
     return {
         "front": front,
         "back": back,
+        "note": normalize_text(" ".join(note_lines)),
         "hint": normalize_text(" ".join(hint_lines)),
     }
 
@@ -301,8 +360,8 @@ class _BackHtmlConverter(HTMLParser):
         while self._stack:
             kind = self._stack.pop()
             if kind == "u":
-                self._parts.append("</u>")
-        return re.sub(r"\s+", " ", "".join(self._parts)).strip()
+                self._parts.append("</strong>")
+        return _strip_after_markers(re.sub(r"\s+", " ", "".join(self._parts)).strip())
 
 
 def strip_back_html(back_html: str) -> str:
@@ -311,14 +370,17 @@ def strip_back_html(back_html: str) -> str:
         return ""
     text = back_html.replace("<u>", "<strong>").replace("</u>", "</strong>")
     text = re.sub(r"<(?!/?strong>)[^>]+>", "", text, flags=re.IGNORECASE)
+    text = _strip_after_markers(text)
     if "<strong>" not in text:
         return ""
-    return text
+    return text.strip()
 
 
 def plain_back_text(back: str, back_html: str = "") -> str:
     if back_html:
-        return re.sub(r"</?(?:u|strong)>", "", back_html, flags=re.IGNORECASE)
+        return _strip_after_markers(
+            re.sub(r"</?(?:u|strong)>", "", back_html, flags=re.IGNORECASE)
+        )
     return back
 
 
@@ -333,11 +395,12 @@ def _extract_html_back_fragments(html: str) -> list[str]:
         else:
             end = re.search(r"</span>", rest, re.IGNORECASE)
             fragment = rest[: end.start() if end else len(rest)]
-        fragments.append(fragment)
+        fragments.append(_trim_html_fragment_at_markers(fragment))
     return fragments
 
 
 def _fragment_to_back_html(fragment: str, underline_classes: set[str]) -> str:
+    fragment = _trim_html_fragment_at_markers(fragment)
     converter = _BackHtmlConverter(underline_classes)
     converter.feed(fragment)
     return strip_back_html(converter.result())
@@ -380,6 +443,7 @@ def parse_cloze_block(block: str) -> list[dict]:
                     "direction": direction,
                     "front": payload["front"],
                     "back": payload["back"],
+                    "note": payload.get("note", ""),
                     "hint": hints.get(direction, ""),
                     "group_key": group_key,
                     "deck": "phrase_lexicon",

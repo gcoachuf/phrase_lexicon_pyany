@@ -354,13 +354,14 @@
 
         els.cardBack.classList.toggle("correct", correct);
         els.cardBack.classList.toggle("incorrect", !correct);
-        const answerHtml = formatBackDisplay(currentCard);
-        els.cardBack.innerHTML = correct
-          ? `<span class="answer-label">✓ Correct</span><span class="answer-text">${answerHtml}</span>`
-          : `<span class="answer-label">Answer</span><span class="answer-text">${answerHtml}</span>${userAnswer ? `<span class="your-answer"> (you wrote: ${escapeHtml(input.value.trim())})</span>` : ""}`;
+        const statusLabel = correct ? "✓ Correct" : "Answer";
+        els.cardBack.innerHTML = buildAnswerHtml(currentCard, {
+          statusLabel,
+          userAnswer: userAnswer ? input.value.trim() : null,
+        });
       } else {
         els.cardBack.classList.remove("correct", "incorrect");
-        els.cardBack.innerHTML = `<span class="answer-text">${formatBackDisplay(currentCard)}</span>`;
+        els.cardBack.innerHTML = buildAnswerHtml(currentCard);
       }
 
       els.cardBack.classList.remove("hidden");
@@ -387,6 +388,24 @@
         return html.replace(/<(?!\/?strong>)[^>]+>/gi, "");
       }
       return escapeHtml(card.back);
+    }
+
+    function buildAnswerHtml(card, { statusLabel = null, userAnswer = null } = {}) {
+      const parts = [
+        `<span class="field-label">ANSWER</span>`,
+        `<span class="answer-text">${formatBackDisplay(card)}</span>`,
+      ];
+      if (card.note) {
+        parts.push(`<span class="field-label note-label">NOTE</span>`);
+        parts.push(`<span class="note-text">${escapeHtml(card.note)}</span>`);
+      }
+      if (statusLabel) {
+        parts.unshift(`<span class="answer-status">${statusLabel}</span>`);
+      }
+      if (userAnswer) {
+        parts.push(`<span class="your-answer"> (you wrote: ${escapeHtml(userAnswer)})</span>`);
+      }
+      return parts.join("");
     }
 
     function toggleHint() {
