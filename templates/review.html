@@ -190,8 +190,10 @@
     }
 
     async function setDirection(next) {
-      const hasCards = directionCounts.en_de > 0 || directionCounts.de_en > 0;
-      if (!hasCards) return;
+      direction = next;
+      document.querySelectorAll(".dir-btn").forEach((button) => {
+        button.classList.toggle("active", button.dataset.direction === direction);
+      });
 
       if (currentCard) {
         if (currentCard.can_switch_direction && currentCard.direction !== next) {
@@ -199,21 +201,13 @@
           if (switched) return;
         }
         if (!currentCard.can_switch_direction) {
-          direction = next;
-          document.querySelectorAll(".dir-btn").forEach((button) => {
-            button.classList.toggle("active", button.dataset.direction === direction);
-          });
           return;
         }
       }
 
-      direction = next;
       sessionDone = 0;
-      document.querySelectorAll(".dir-btn").forEach((button) => {
-        button.classList.toggle("active", button.dataset.direction === direction);
-      });
       updateSessionProgress();
-      loadNextCard();
+      await loadNextCard();
     }
 
     function getSessionGoal() {
@@ -250,6 +244,7 @@
 
     function showEmptyState(title, hint) {
       currentCard = null;
+      els.loadingState.classList.add("hidden");
       els.cardArea.classList.add("hidden");
       els.emptyState.classList.remove("hidden");
       els.emptyTitle.textContent = title;
@@ -428,27 +423,31 @@
         return;
       }
 
-      const res = await fetch(`/api/next?direction=${direction}`);
-      const data = await res.json();
-      updateStats(data.stats);
-      if (data.direction_counts) {
-        directionCounts = data.direction_counts;
-      }
-      els.loadingState.classList.add("hidden");
-
-      if (!data.card) {
-        updateDirectionButtons();
-        if (sessionDone > 0) {
-          showSessionComplete();
-        } else {
-          showEmptyState(
-            "Gerade keine Karten fällig.",
-            "Klicke auf <strong>Sync from Google Doc</strong>, um Phrasen zu importieren, oder komm später wieder."
-          );
+      try {
+        const res = await fetch(`/api/next?direction=${direction}`);
+        const data = await res.json();
+        updateStats(data.stats);
+        if (data.direction_counts) {
+          directionCounts = data.direction_counts;
         }
-        return;
+
+        if (!data.card) {
+          updateDirectionButtons();
+          if (sessionDone > 0) {
+            showSessionComplete();
+          } else {
+            showEmptyState(
+              "Gerade keine Karten fällig.",
+              "Klicke auf <strong>Sync from Google Doc</strong>, um Phrasen zu importieren, oder komm später wieder."
+            );
+          }
+          return;
+        }
+        renderCard(data.card);
+      } catch (err) {
+        els.loadingState.classList.add("hidden");
+        showEmptyState("Karten konnten nicht geladen werden.", err.message || "Bitte Seite neu laden.");
       }
-      renderCard(data.card);
     }
 
     async function refreshStatus() {
@@ -639,8 +638,12 @@
     });
 
     async function init() {
-      setDirection(direction);
+      document.querySelectorAll(".dir-btn").forEach((button) => {
+        button.classList.toggle("active", button.dataset.direction === direction);
+      });
+      updateSessionProgress();
       await refreshStatus();
+      await loadNextCard();
     }
 
     init();
