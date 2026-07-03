@@ -1,0 +1,5 @@
+# Reference only — use the project-root file:
+#   /home/YOURUSERNAME/phrase_lexicon_pyany/wsgi.py
+#
+# If the Web tab only edits /var/www/YOURUSERNAME_pythonanywhere_com_wsgi.py,
+# replace that file's contents with the full contents of wsgi.py from the project root.

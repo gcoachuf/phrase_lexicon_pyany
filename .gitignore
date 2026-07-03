@@ -4,3 +4,14 @@ __pycache__/
 .env
 .venv/
 venv/
+.idea/
+.vscode/
+.test_data/
+.test_data2/
+.test_data3/
+hints/*.png
+hints/*.jpg
+hints/*.jpeg
+hints/*.gif
+hints/*.webp
+!hints/.gitkeep
