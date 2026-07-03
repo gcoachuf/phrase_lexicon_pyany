@@ -400,16 +400,21 @@ def plain_back_text(back: str, back_html: str = "") -> str:
 
 
 def _extract_html_back_fragments(html: str) -> list[str]:
+    """Take each Back: field through the end of its paragraph.
+
+    Google Docs often splits one Back line across several <span>s (plain text,
+    then underlined answer words). Stopping at the first </span> drops those
+    later spans, so pills never appear.
+    """
     fragments: list[str] = []
     for match in re.finditer(r"Back:\s*", html, re.IGNORECASE):
         rest = html[match.end() :]
         if rest.startswith("</span>"):
             rest = rest[len("</span>") :]
-            end = re.search(r"</p>\s*<p", rest, re.IGNORECASE)
-            fragment = rest[: end.start() if end else len(rest)]
-        else:
-            end = re.search(r"</span>", rest, re.IGNORECASE)
-            fragment = rest[: end.start() if end else len(rest)]
+        end = re.search(r"</p>\s*<p", rest, re.IGNORECASE)
+        if not end:
+            end = re.search(r"</p>", rest, re.IGNORECASE)
+        fragment = rest[: end.start() if end else len(rest)]
         fragments.append(_trim_html_fragment_at_markers(fragment))
     return fragments
 
