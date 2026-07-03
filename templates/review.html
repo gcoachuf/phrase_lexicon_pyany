@@ -346,23 +346,32 @@
     }
 
     function revealAnswer() {
-      const input = els.cardFront.querySelector(".cloze-input");
-      const hasCloze = Boolean(input);
+      const inputs = [...els.cardFront.querySelectorAll(".cloze-input")];
+      const hasCloze = inputs.length > 0;
 
       if (hasCloze) {
-        const userAnswer = normalizeAnswer(input.value);
+        // Join all blanks — cards can have multiple _____ fields.
+        const typed = inputs.map((input) => input.value.trim()).filter(Boolean);
+        const userAnswer = normalizeAnswer(typed.join(" "));
         const expected = normalizeAnswer(stripHtmlTags(currentCard.back_html || currentCard.back));
         const correct = userAnswer === expected;
+        const expectedParts = expected.split(" ").filter(Boolean);
 
-        input.disabled = true;
-        input.classList.add(correct ? "correct" : "incorrect");
+        inputs.forEach((input, index) => {
+          input.disabled = true;
+          const partCorrect =
+            inputs.length === expectedParts.length
+              ? normalizeAnswer(input.value) === expectedParts[index]
+              : correct;
+          input.classList.add(partCorrect ? "correct" : "incorrect");
+        });
 
         els.cardBack.classList.toggle("correct", correct);
         els.cardBack.classList.toggle("incorrect", !correct);
         const statusLabel = correct ? "✓ Correct" : null;
         els.cardBack.innerHTML = buildAnswerHtml(currentCard, {
           statusLabel,
-          userAnswer: userAnswer ? input.value.trim() : null,
+          userAnswer: typed.length ? typed.join(" ") : null,
         });
       } else {
         els.cardBack.classList.remove("correct", "incorrect");
