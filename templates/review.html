@@ -301,7 +301,9 @@
     }
 
     function normalizeAnswer(value) {
-      return value.trim().toLowerCase().replace(/\s+/g, " ");
+      // Ignore trailing sentence punctuation — Docs often underlines "machen."
+      // while the blank is only "machen" (period sits after _____ in Front).
+      return value.trim().toLowerCase().replace(/\s+/g, " ").replace(/[.,;:!?]+$/g, "");
     }
 
     function escapeRegExp(value) {

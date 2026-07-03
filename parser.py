@@ -386,6 +386,15 @@ def strip_back_html(back_html: str) -> str:
     text = back_html.replace("<u>", "<strong>").replace("</u>", "</strong>")
     text = re.sub(r"<(?!/?strong>)[^>]+>", "", text, flags=re.IGNORECASE)
     text = _strip_after_markers(text)
+    # Google Docs often underlines the trailing period with the answer word
+    # (Front has "_____ ." but Back highlight is "machen."). Keep punctuation
+    # outside the pill so grading expects "machen", not "machen.".
+    text = re.sub(
+        r"(<strong>)(.*?)([.,;:!?]+)(</strong>)",
+        r"\1\2\4\3",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     if "<strong>" not in text:
         return ""
     return text.strip()
